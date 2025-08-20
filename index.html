@@ -407,25 +407,25 @@
     </div>
 
     <div class="container">
-        <div class="local-mode">🔧 Local Development Mode - Running on localhost</div>
+        <div class="local-mode">Local Development Mode - Running on localhost</div>
         <h1>Document Text Replacer</h1>
         <p class="subtitle">Replace text in PDF, CSV, XML, XPT files and ZIP folders with ease</p>
         
         <div class="left-panel">
             <div class="form-group">
-                <label for="old_text">🔍 Text to Find</label>
+                <label for="old_text">Text to Find</label>
                 <input type="text" id="old_text" placeholder="Enter the text you want to replace..." required>
             </div>
             
             <div class="form-group">
-                <label for="new_text">✏️ Replace With</label>
+                <label for="new_text">Replace With</label>
                 <input type="text" id="new_text" placeholder="Enter the replacement text...">
             </div>
             
             <div class="form-group">
-                <label>📁 Upload Documents</label>
+                <label>Upload Documents</label>
                 <div class="file-upload-area" id="fileUploadArea">
-                    <span class="upload-icon">⬆️</span>
+                    <span class="upload-icon">&#8593;</span>
                     <div class="upload-text">Drop your files here or click to browse</div>
                     <div class="upload-subtext">Supports PDF, CSV, XML, XPT files and ZIP folders</div>
                     <input type="file" id="pdf-file-input" accept=".pdf,.csv,.xml,.xpt,.zip" multiple>
@@ -433,7 +433,7 @@
                 </div>
                 <div class="file-types">Supported formats: PDF, CSV, XML, XPT, ZIP (Max 50MB total)</div>
                 <div class="multiple-files-info">
-                    💡 You can select multiple files or upload a ZIP folder containing supported files
+                    You can select multiple files or upload a ZIP folder containing supported files
                 </div>
             </div>
         </div>
@@ -455,7 +455,7 @@
             </div>
             
             <button type="button" class="btn btn-primary" id="processBtn" disabled>
-                <span>🚀 Process Documents</span>
+                <span>Process Documents</span>
             </button>
             
             <div class="spinner" id="loadingSpinner">
@@ -465,7 +465,7 @@
             <div class="status-message" id="statusMessage"></div>
             
             <button type="button" class="btn btn-success" id="downloadBtn" style="display: none;">
-                <span>⬇️ Download Modified Files</span>
+                <span>Download Modified Files</span>
             </button>
         </div>
     </div>
@@ -484,18 +484,20 @@
         let currentFiles = [];
         
         // File upload handling
-        fileUploadArea.addEventListener('click', () => fileInput.click());
+        fileUploadArea.addEventListener('click', function() { 
+            fileInput.click(); 
+        });
         
-        fileUploadArea.addEventListener('dragover', (e) => {
+        fileUploadArea.addEventListener('dragover', function(e) {
             e.preventDefault();
             fileUploadArea.classList.add('dragover');
         });
         
-        fileUploadArea.addEventListener('dragleave', () => {
+        fileUploadArea.addEventListener('dragleave', function() {
             fileUploadArea.classList.remove('dragover');
         });
         
-        fileUploadArea.addEventListener('drop', (e) => {
+        fileUploadArea.addEventListener('drop', function(e) {
             e.preventDefault();
             fileUploadArea.classList.remove('dragover');
             const files = Array.from(e.dataTransfer.files);
@@ -504,7 +506,7 @@
             }
         });
         
-        fileInput.addEventListener('change', (e) => {
+        fileInput.addEventListener('change', function(e) {
             if (e.target.files.length > 0) {
                 handleFileSelect(Array.from(e.target.files));
             }
@@ -519,7 +521,7 @@
                 const fileExt = '.' + file.name.split('.').pop().toLowerCase();
                 
                 if (!allowedTypes.includes(fileExt)) {
-                    showStatus(`Invalid file type: ${file.name}. Please select PDF, CSV, XML, XPT, or ZIP files.`, 'error');
+                    showStatus('Invalid file type: ' + file.name + '. Please select PDF, CSV, XML, XPT, or ZIP files.', 'error');
                     return;
                 }
                 
@@ -536,12 +538,12 @@
             
             // Display file info
             if (validFiles.length === 1) {
-                fileInfo.innerHTML = `📄 ${validFiles[0].name} (${formatFileSize(validFiles[0].size)})`;
+                fileInfo.innerHTML = validFiles[0].name + ' (' + formatFileSize(validFiles[0].size) + ')';
             } else {
-                const fileList = validFiles.map(file => 
-                    `<div class="file-item">📄 ${file.name} (${formatFileSize(file.size)})</div>`
-                ).join('');
-                fileInfo.innerHTML = `<div><strong>${validFiles.length} files selected:</strong></div>${fileList}`;
+                const fileList = validFiles.map(function(file) {
+                    return '<div class="file-item">' + file.name + ' (' + formatFileSize(file.size) + ')</div>';
+                }).join('');
+                fileInfo.innerHTML = '<div><strong>' + validFiles.length + ' files selected:</strong></div>' + fileList;
             }
             
             fileInfo.style.display = 'block';
@@ -568,7 +570,7 @@
         newTextInput.addEventListener('input', checkFormValidity);
         
         // Process button click
-        processBtn.addEventListener('click', async () => {
+        processBtn.addEventListener('click', async function() {
             if (currentFiles.length === 0 || !oldTextInput.value.trim()) {
                 showStatus('Please select files and enter text to find', 'error');
                 return;
@@ -577,7 +579,7 @@
             const formData = new FormData();
             
             // Append all files
-            currentFiles.forEach(file => {
+            currentFiles.forEach(function(file) {
                 formData.append('pdf_file', file);
             });
             
@@ -603,7 +605,7 @@
                 // Determine download filename
                 let filename;
                 if (currentFiles.length === 1) {
-                    filename = `modified_${currentFiles[0].name}`;
+                    filename = 'modified_' + currentFiles[0].name;
                 } else {
                     filename = 'modified_files.zip';
                 }
@@ -612,18 +614,18 @@
                 downloadBtn.setAttribute('data-url', url);
                 downloadBtn.setAttribute('data-filename', filename);
                 
-                showStatus('✅ Documents processed successfully!', 'success');
+                showStatus('Documents processed successfully!', 'success');
                 downloadBtn.style.display = 'flex';
                 
             } catch (error) {
-                showStatus(`❌ Error: ${error.message}`, 'error');
+                showStatus('Error: ' + error.message, 'error');
             } finally {
                 setProcessingState(false);
             }
         });
         
         // Download button click
-        downloadBtn.addEventListener('click', () => {
+        downloadBtn.addEventListener('click', function() {
             const url = downloadBtn.getAttribute('data-url');
             const filename = downloadBtn.getAttribute('data-filename');
             
@@ -636,7 +638,7 @@
                 a.remove();
                 window.URL.revokeObjectURL(url);
                 
-                showStatus('📥 Download started!', 'success');
+                showStatus('Download started!', 'success');
             }
         });
         
@@ -653,11 +655,13 @@
         
         function showStatus(message, type) {
             statusMessage.textContent = message;
-            statusMessage.className = `status-message status-${type}`;
+            statusMessage.className = 'status-message status-' + type;
             statusMessage.style.display = 'block';
             
             if (type === 'error') {
-                setTimeout(() => hideStatus(), 5000);
+                setTimeout(function() { 
+                    hideStatus(); 
+                }, 5000);
             }
         }
         
@@ -666,7 +670,7 @@
         }
         
         // Add some interactive animations
-        document.querySelectorAll('.btn').forEach(btn => {
+        document.querySelectorAll('.btn').forEach(function(btn) {
             btn.addEventListener('mouseenter', function() {
                 if (!this.disabled) {
                     this.style.transform = 'translateY(-3px)';
@@ -680,7 +684,7 @@
             });
         });
         
-        document.querySelectorAll('input[type="text"]').forEach(input => {
+        document.querySelectorAll('input[type="text"]').forEach(function(input) {
             input.addEventListener('focus', function() {
                 this.parentElement.querySelector('label').style.color = '#667eea';
             });
