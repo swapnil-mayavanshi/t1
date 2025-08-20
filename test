@@ -234,34 +234,37 @@
                 // Check the content type of the response
                 const contentType = response.headers.get('content-type');
 
-                if (contentType && contentType.includes('application/json')) {
-                    // This is a JSON response (likely an error)
-                    const data = await response.json();
-                    if (response.ok) {
-                        showStatus(data.message || 'Processing successful!', 'success');
+                if (response.ok) {
+                    if (contentType && contentType.includes('application/zip')) {
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.style.display = 'none';
+                        a.href = url;
+                        // Use a fallback filename if header is not present
+                        const filename = response.headers.get('content-disposition')?.split('filename=')[1].replace(/\"/g, '') || 'processed_files.zip';
+                        a.download = filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        showStatus('Files processed and downloaded successfully!', 'success');
                     } else {
-                        showStatus(data.error || 'An error occurred on the server.', 'error');
+                        showStatus('Server returned success but file could not be downloaded. Please check server logs.', 'error');
+                        console.error('Unexpected successful response content:', await response.text());
                     }
-                } else if (contentType && contentType.includes('application/zip')) {
-                    // This is a file download
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.style.display = 'none';
-                    a.href = url;
-                    a.download = response.headers.get('content-disposition').split('filename=')[1].replace(/\"/g, '');
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    showStatus('Files processed and downloaded successfully!', 'success');
                 } else {
-                    // Handle other unexpected responses
-                    showStatus('Unexpected response from server.', 'error');
+                    if (contentType && contentType.includes('application/json')) {
+                        const data = await response.json();
+                        showStatus(data.error || 'An unexpected error occurred.', 'error');
+                    } else {
+                        showStatus('Server error. Check the browser console for details.', 'error');
+                        console.error('Server returned an unexpected error page/text:', await response.text());
+                    }
                 }
 
             } catch (error) {
                 console.error('Fetch error:', error);
-                showStatus('Network or server connection failed.', 'error');
+                showStatus('Network or server connection failed. Check your internet connection.', 'error');
             } finally {
                 uploadBtn.disabled = false;
                 loader.style.display = 'none';
@@ -272,10 +275,6 @@
             statusMessage.textContent = message;
             statusMessage.className = `status-message status-${type}`;
             statusMessage.style.display = 'block';
-
-            if (type === 'error') {
-                setTimeout(() => hideStatus(), 5000);
-            }
         }
 
         function hideStatus() {
