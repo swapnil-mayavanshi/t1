@@ -1,4 +1,4 @@
-from flask import Flask, request, send_file, jsonify
+from flask import Flask, request, send_file, jsonify, send_from_directory
 import os
 import fitz  # PyMuPDF
 import pandas as pd
@@ -183,7 +183,7 @@ def extract_zip_and_process(zip_path, old_text, new_text):
 
 @app.route('/')
 def index():
-    return "Document Text Replacer API is running"
+    return send_from_directory('.', 'index.html')
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
