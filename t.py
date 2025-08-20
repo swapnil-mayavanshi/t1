@@ -1,4 +1,4 @@
-from flask import Flask, request, send_file, jsonify, send_from_directory
+from flask import Flask, request, render_template, send_file, jsonify
 import os
 import fitz  # PyMuPDF
 import pandas as pd
@@ -13,113 +13,98 @@ from werkzeug.utils import secure_filename
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
 
-# Create uploads directory
+# Create uploads and templates directories
 UPLOAD_FOLDER = 'uploads'
+TEMPLATES_FOLDER = 'templates'
+
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
+
+if not os.path.exists(TEMPLATES_FOLDER):
+    os.makedirs(TEMPLATES_FOLDER)
 
 # ---------------- File Processing Functions ----------------
 
 def replace_text_in_pdf(input_pdf_path, old_text, new_text):
     """Replace text in PDF file"""
-    try:
-        pdf_document = fitz.open(input_pdf_path)
-        font_name = "Times-Roman"
-        
-        for page in pdf_document:
-            text_instances = page.search_for(old_text)
-            if text_instances:
-                original_text_info = page.get_text("dict")['blocks']
+    pdf_document = fitz.open(input_pdf_path)
+    font_name = "Times-Roman"
+    
+    for page in pdf_document:
+        text_instances = page.search_for(old_text)
+        if text_instances:
+            original_text_info = page.get_text("dict")['blocks']
+            
+            for rect in text_instances:
+                page.add_redact_annot(rect)
+            page.apply_redactions()
+            
+            for rect in text_instances:
+                original_fontsize = 12
+                for block in original_text_info:
+                    for line in block.get("lines", []):
+                        for span in line.get("spans", []):
+                            if old_text in span["text"]:
+                                original_fontsize = span["size"]
+                                break
+                        else:
+                            continue
+                        break
+                    else:
+                        continue
+                    break
                 
-                for rect in text_instances:
-                    page.add_redact_annot(rect)
-                page.apply_redactions()
-                
-                for rect in text_instances:
-                    original_fontsize = 12
-                    for block in original_text_info:
-                        if 'lines' in block:
-                            for line in block.get("lines", []):
-                                for span in line.get("spans", []):
-                                    if old_text in span.get("text", ""):
-                                        original_fontsize = span.get("size", 12)
-                                        break
-                    
-                    font_params = {
-                        'fontsize': original_fontsize,
-                        'fontname': font_name
-                    }
-                    insert_point = fitz.Point(rect.x0, rect.y1 - 2.5)
-                    page.insert_text(insert_point, new_text, **font_params)
-        
-        output_path = input_pdf_path.replace('.pdf', '_modified.pdf')
-        pdf_document.save(output_path)
-        pdf_document.close()
-        return output_path
-    except Exception as e:
-        print(f"Error processing PDF: {str(e)}")
-        return None
+                font_params = {
+                    'fontsize': original_fontsize,
+                    'fontname': font_name
+                }
+                insert_point = fitz.Point(rect.x0, rect.y1 - 2.5)
+                page.insert_text(insert_point, new_text, **font_params)
+    
+    output_path = input_pdf_path.replace('.pdf', '_modified.pdf')
+    pdf_document.save(output_path)
+    pdf_document.close()
+    return output_path
 
 def replace_text_in_csv(input_csv_path, old_text, new_text):
     """Replace text in CSV file"""
-    try:
-        df = pd.read_csv(input_csv_path, dtype=str)
-        # Handle NaN values
-        df = df.fillna('')
-        # Replace text in all string columns
-        for col in df.columns:
-            df[col] = df[col].astype(str).str.replace(old_text, new_text, regex=False)
-        
-        output_path = input_csv_path.replace('.csv', '_modified.csv')
-        df.to_csv(output_path, index=False)
-        return output_path
-    except Exception as e:
-        print(f"Error processing CSV: {str(e)}")
-        return None
+    df = pd.read_csv(input_csv_path, dtype=str)
+    df = df.applymap(lambda x: x.replace(old_text, new_text) if isinstance(x, str) else x)
+    
+    output_path = input_csv_path.replace('.csv', '_modified.csv')
+    df.to_csv(output_path, index=False)
+    return output_path
 
 def replace_text_in_xml(input_xml_path, old_text, new_text):
     """Replace text in XML file"""
-    try:
-        tree = ET.parse(input_xml_path)
-        root = tree.getroot()
-        
-        def replace_in_element(elem):
-            if elem.text and old_text in elem.text:
-                elem.text = elem.text.replace(old_text, new_text)
-            if elem.tail and old_text in elem.tail:
-                elem.tail = elem.tail.replace(old_text, new_text)
-            for k, v in elem.attrib.items():
-                if old_text in v:
-                    elem.attrib[k] = v.replace(old_text, new_text)
-            for child in elem:
-                replace_in_element(child)
-        
-        replace_in_element(root)
-        
-        output_path = input_xml_path.replace('.xml', '_modified.xml')
-        tree.write(output_path, encoding="utf-8", xml_declaration=True)
-        return output_path
-    except Exception as e:
-        print(f"Error processing XML: {str(e)}")
-        return None
+    tree = ET.parse(input_xml_path)
+    root = tree.getroot()
+    
+    def replace_in_element(elem):
+        if elem.text and old_text in elem.text:
+            elem.text = elem.text.replace(old_text, new_text)
+        if elem.tail and old_text in elem.tail:
+            elem.tail = elem.tail.replace(old_text, new_text)
+        for k, v in elem.attrib.items():
+            if old_text in v:
+                elem.attrib[k] = v.replace(old_text, new_text)
+        for child in elem:
+            replace_in_element(child)
+    
+    replace_in_element(root)
+    
+    output_path = input_xml_path.replace('.xml', '_modified.xml')
+    tree.write(output_path, encoding="utf-8", xml_declaration=True)
+    return output_path
 
 def replace_text_in_xpt(input_xpt_path, old_text, new_text):
     """Replace text in XPT file"""
-    try:
-        df, meta = pyreadstat.read_xport(input_xpt_path)
-        # Handle NaN values
-        df = df.fillna('')
-        # Replace text in all string columns
-        for col in df.columns:
-            df[col] = df[col].astype(str).str.replace(old_text, new_text, regex=False)
-        
-        output_path = input_xpt_path.replace('.xpt', '_modified.xpt')
-        table_name = meta.table_name if meta.table_name else 'DATA'
-        pyreadstat.write_xport(df, output_path, file_format_version=8, table_name=table_name)
-        return output_path
-    except Exception as e:
-        print(f"Error processing XPT: {str(e)}")
-        return None
+    df, meta = pyreadstat.read_xport(input_xpt_path)
+    df = df.applymap(lambda x: x.replace(old_text, new_text) if isinstance(x, str) else x)
+    
+    output_path = input_xpt_path.replace('.xpt', '_modified.xpt')
+    pyreadstat.write_xport(df, output_path, file_format_version=8, table_name=meta.table_name)
+    return output_path
 
 def process_single_file(file_path, old_text, new_text):
     """Process a single file based on its extension"""
@@ -176,14 +161,13 @@ def extract_zip_and_process(zip_path, old_text, new_text):
             
     finally:
         # Clean up extracted folder
-        if os.path.exists(extract_folder):
-            shutil.rmtree(extract_folder, ignore_errors=True)
+        shutil.rmtree(extract_folder, ignore_errors=True)
 
 # ---------------- Routes ----------------
 
 @app.route('/')
 def index():
-    return send_from_directory('.', 'index.html')
+    return render_template('index.html')
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -238,8 +222,7 @@ def upload_file():
                 # Clean up on error
                 for temp_file in temp_files:
                     try:
-                        if os.path.exists(temp_file):
-                            os.remove(temp_file)
+                        os.remove(temp_file)
                     except:
                         pass
                 return jsonify({'error': f'Error processing {filename}: {str(e)}'}), 500
@@ -264,7 +247,7 @@ def upload_file():
                 for processed_file in processed_files:
                     zip_ref.write(processed_file['path'], processed_file['name'])
             
-            processed_files.append({'path': zip_path, 'name': zip_filename})
+            processed_files.append({'path': zip_path, 'name': zip_filename})  # Add zip to cleanup list
             
             response = send_file(
                 zip_path,
@@ -273,11 +256,8 @@ def upload_file():
                 mimetype='application/zip'
             )
         
-        # Clean up files after a delay
-        import threading
-        def cleanup_files():
-            import time
-            time.sleep(30)  # Wait 30 seconds before cleanup
+        # Clean up files after sending
+        def remove_files():
             try:
                 for temp_file in temp_files:
                     if os.path.exists(temp_file):
@@ -286,19 +266,17 @@ def upload_file():
                     if os.path.exists(processed_file['path']):
                         os.remove(processed_file['path'])
             except Exception as e:
-                print(f"Cleanup error: {e}")
+                print(f"Error cleaning up files: {e}")
         
-        cleanup_thread = threading.Thread(target=cleanup_files)
-        cleanup_thread.daemon = True
-        cleanup_thread.start()
+        # Schedule cleanup (in production, use a proper background task)
+        import threading
+        threading.Timer(15.0, remove_files).start()
         
         return response
         
     except Exception as e:
-        return jsonify({'error': f'Server error: {str(e)}'}), 500
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    print("Starting Flask application...")
-    print("Server will be available at: http://127.0.0.1:5000")
-    print("Press CTRL+C to stop the server")
-    app.run(debug=True, host='127.0.0.1', port=5000)
+    # Local development settings
+    app.run(debug=True)
