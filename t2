@@ -1,0 +1,187 @@
+from flask import Flask, request, render_template, send_file, jsonify
+import os
+import fitz  # PyMuPDF
+import pandas as pd
+import xml.etree.ElementTree as ET
+import pyreadstat
+import uuid
+import tempfile
+import shutil
+import zipfile
+from werkzeug.utils import secure_filename
+import threading
+
+app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
+
+# Use absolute paths to prevent environment-related issues
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
+TEMPLATES_FOLDER = os.path.join(BASE_DIR, 'templates')
+
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+
+if not os.path.exists(TEMPLATES_FOLDER):
+    os.makedirs(TEMPLATES_FOLDER)
+
+# ---------------- File Processing Functions ----------------
+
+def replace_text_in_pdf(input_pdf_path, old_text, new_text):
+    """Replace text in PDF file"""
+    pdf_document = fitz.open(input_pdf_path)
+    # The font_name and other logic here needs to be robust to the original PDF's fonts.
+    # For now, we will stick to the basic replacement.
+    
+    for page in pdf_document:
+        text_instances = page.search_for(old_text)
+        if text_instances:
+            for rect in text_instances:
+                page.add_redact_annot(rect)
+            
+            # Apply the redactions, adding the new text
+            page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE)
+            page.insert_text(rect.br, new_text, fontname="helv", fontsize=11) # Example, may need tuning
+            
+    # Save the modified PDF to a new path
+    output_pdf_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}.pdf")
+    pdf_document.save(output_pdf_path)
+    pdf_document.close()
+    return output_pdf_path
+
+def process_file(file, old_text, new_text):
+    filename = secure_filename(file.filename)
+    file_extension = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+    
+    # Save the uploaded file to a temporary location
+    temp_path = os.path.join(tempfile.gettempdir(), str(uuid.uuid4()) + '.' + file_extension)
+    file.save(temp_path)
+    
+    processed_file_path = None
+    
+    if file_extension == 'pdf':
+        processed_file_path = replace_text_in_pdf(temp_path, old_text, new_text)
+    elif file_extension == 'csv':
+        df = pd.read_csv(temp_path)
+        df.replace(to_replace=old_text, value=new_text, inplace=True)
+        processed_file_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}.csv")
+        df.to_csv(processed_file_path, index=False)
+    elif file_extension == 'xml':
+        tree = ET.parse(temp_path)
+        root = tree.getroot()
+        for element in root.iter():
+            if element.text and old_text in element.text:
+                element.text = element.text.replace(old_text, new_text)
+        processed_file_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}.xml")
+        tree.write(processed_file_path, encoding='utf-8', xml_declaration=True)
+    elif file_extension == 'json':
+        with open(temp_path, 'r', encoding='utf-8') as f:
+            data = f.read()
+            data = data.replace(old_text, new_text)
+        processed_file_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}.json")
+        with open(processed_file_path, 'w', encoding='utf-8') as f:
+            f.write(data)
+    elif file_extension == 'html':
+        with open(temp_path, 'r', encoding='utf-8') as f:
+            data = f.read()
+            data = data.replace(old_text, new_text)
+        processed_file_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}.html")
+        with open(processed_file_path, 'w', encoding='utf-8') as f:
+            f.write(data)
+    elif file_extension == 'spss':
+        df, meta = pyreadstat.read_sav(temp_path)
+        df = df.astype(str)
+        df.replace(to_replace=old_text, value=new_text, inplace=True)
+        processed_file_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}.sav")
+        pyreadstat.write_sav(df, processed_file_path, compress=True)
+    else:
+        # Default to a simple text replacement for other file types
+        with open(temp_path, 'r', encoding='utf-8', errors='ignore') as f:
+            data = f.read()
+            data = data.replace(old_text, new_text)
+        processed_file_path = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4()}.{file_extension}")
+        with open(processed_file_path, 'w', encoding='utf-8') as f:
+            f.write(data)
+
+    return processed_file_path, temp_path
+
+# ---------------- Flask Routes ----------------
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/upload_files', methods=['POST'])
+def upload_files():
+    temp_files = []
+    processed_files = []
+    
+    try:
+        if 'files' not in request.files:
+            return jsonify({'error': 'No file part in the request'}), 400
+        
+        files = request.files.getlist('files')
+        old_text = request.form.get('old_text', '')
+        new_text = request.form.get('new_text', '')
+
+        if not files or files[0].filename == '':
+            return jsonify({'error': 'No selected files'}), 400
+
+        if not old_text:
+            return jsonify({'error': 'Old text cannot be empty'}), 400
+        
+        for file in files:
+            if file:
+                try:
+                    processed_path, temp_path = process_file(file, old_text, new_text)
+                    temp_files.append(temp_path)
+                    processed_files.append({
+                        'path': processed_path,
+                        'name': secure_filename(file.filename)
+                    })
+                except Exception as e:
+                    # Catch and report processing errors per file
+                    return jsonify({'error': f"Failed to process file {secure_filename(file.filename)}: {str(e)}"}), 500
+
+        # Create a zip file
+        zip_filename = f"processed_documents_{uuid.uuid4().hex}.zip"
+        zip_path = os.path.join(tempfile.gettempdir(), zip_filename)
+        
+        with zipfile.ZipFile(zip_path, 'w') as zip_ref:
+            for processed_file in processed_files:
+                zip_ref.write(processed_file['path'], processed_file['name'])
+        
+        processed_files.append({'path': zip_path, 'name': zip_filename})
+
+        response = send_file(
+            zip_path,
+            as_attachment=True,
+            download_name=zip_filename,
+            mimetype='application/zip'
+        )
+        
+        # Define a cleanup function to remove temporary files
+        def cleanup_files():
+            try:
+                for f_info in processed_files:
+                    if os.path.exists(f_info['path']):
+                        os.remove(f_info['path'])
+                for f_path in temp_files:
+                    if os.path.exists(f_path):
+                        os.remove(f_path)
+            except Exception as e:
+                print(f"Error during file cleanup: {e}")
+
+        # Schedule the cleanup to run after the response has been sent
+        cleanup_thread = threading.Timer(10.0, cleanup_files)
+        cleanup_thread.daemon = True # Allows thread to exit when the main program does
+        cleanup_thread.start()
+        
+        return response
+        
+    except Exception as e:
+        # This catches any other unexpected errors
+        return jsonify({'error': f"A server error occurred: {str(e)}"}), 500
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5000)
