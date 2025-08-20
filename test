@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Text Replacer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .navbar {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 15px 30px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .navbar-brand {
+            color: white;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            text-align: center;
+        }
+
+        h1 {
+            color: white;
+            margin-bottom: 20px;
+            font-size: 2.5rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+            position: relative;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #f1f1f1;
+            font-weight: 600;
+            transition: color 0.3s;
+        }
+
+        .form-group input[type="file"],
+        .form-group input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+
+        .form-group input[type="file"]::file-selector-button {
+            background-color: #764ba2;
+            color: white;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .form-group input[type="file"]::file-selector-button:hover {
+            background-color: #6a3c91;
+        }
+
+        .form-group input[type="text"]::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .form-group input[type="text"]:focus {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: #fff;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+        }
+
+        .btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.2rem;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: #45a049;
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:disabled {
+            background: #aaa;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+
+        .status-message {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            font-weight: 600;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+            display: none;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <span class="navbar-brand">Document Text Replacer</span>
+    </div>
+    <div class="container">
+        <h1>Replace Text in Documents</h1>
+        <form id="uploadForm">
+            <div class="form-group">
+                <label for="files">Select Documents:</label>
+                <input type="file" id="files" name="files" multiple required>
+            </div>
+            <div class="form-group">
+                <label for="old_text">Text to Replace:</label>
+                <input type="text" id="old_text" name="old_text" placeholder="e.g., 'old text'" required>
+            </div>
+            <div class="form-group">
+                <label for="new_text">Replacement Text:</label>
+                <input type="text" id="new_text" name="new_text" placeholder="e.g., 'new text'" required>
+            </div>
+            <button type="submit" class="btn" id="uploadBtn">Process Documents</button>
+        </form>
+        <div class="loader" id="loader"></div>
+        <div id="statusMessage" class="status-message"></div>
+    </div>
+
+    <script>
+        const form = document.getElementById('uploadForm');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const loader = document.getElementById('loader');
+        const statusMessage = document.getElementById('statusMessage');
+
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const files = document.getElementById('files').files;
+            const oldText = document.getElementById('old_text').value;
+            const newText = document.getElementById('new_text').value;
+
+            if (files.length === 0) {
+                showStatus('Please select at least one file.', 'error');
+                return;
+            }
+
+            uploadBtn.disabled = true;
+            loader.style.display = 'block';
+            hideStatus();
+
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append('files', files[i]);
+            }
+            formData.append('old_text', oldText);
+            formData.append('new_text', newText);
+
+            try {
+                const response = await fetch('/upload_files', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                // Check the content type of the response
+                const contentType = response.headers.get('content-type');
+
+                if (contentType && contentType.includes('application/json')) {
+                    // This is a JSON response (likely an error)
+                    const data = await response.json();
+                    if (response.ok) {
+                        showStatus(data.message || 'Processing successful!', 'success');
+                    } else {
+                        showStatus(data.error || 'An error occurred on the server.', 'error');
+                    }
+                } else if (contentType && contentType.includes('application/zip')) {
+                    // This is a file download
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = response.headers.get('content-disposition').split('filename=')[1].replace(/\"/g, '');
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    showStatus('Files processed and downloaded successfully!', 'success');
+                } else {
+                    // Handle other unexpected responses
+                    showStatus('Unexpected response from server.', 'error');
+                }
+
+            } catch (error) {
+                console.error('Fetch error:', error);
+                showStatus('Network or server connection failed.', 'error');
+            } finally {
+                uploadBtn.disabled = false;
+                loader.style.display = 'none';
+            }
+        });
+
+        function showStatus(message, type) {
+            statusMessage.textContent = message;
+            statusMessage.className = `status-message status-${type}`;
+            statusMessage.style.display = 'block';
+
+            if (type === 'error') {
+                setTimeout(() => hideStatus(), 5000);
+            }
+        }
+
+        function hideStatus() {
+            statusMessage.style.display = 'none';
+        }
+
+        // Add some interactive animations
+        document.querySelectorAll('.btn').forEach(btn => {
+            btn.addEventListener('mouseenter', function() {
+                if (!this.disabled) {
+                    this.style.transform = 'translateY(-3px)';
+                }
+            });
+
+            btn.addEventListener('mouseleave', function() {
+                if (!this.disabled) {
+                    this.style.transform = 'translateY(0)';
+                }
+            });
+        });
+
+        document.querySelectorAll('input[type="text"]').forEach(input => {
+            input.addEventListener('focus', function() {
+                this.parentElement.querySelector('label').style.color = '#667eea';
+            });
+
+            input.addEventListener('blur', function() {
+                this.parentElement.querySelector('label').style.color = '#555';
+            });
+        });
+    </script>
+</body>
+</html>
