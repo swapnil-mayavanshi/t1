@@ -15,10 +15,26 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
             padding: 20px;
+        }
+        
+        .navbar {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 15px 30px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .navbar-brand {
+            color: white;
+            font-size: 1.5rem;
+            font-weight: 700;
+            text-decoration: none;
         }
         
         .container {
@@ -34,6 +50,7 @@
             gap: 30px;
             position: relative;
             overflow: hidden;
+            margin: 0 auto;
         }
         
         .container::before {
@@ -371,11 +388,26 @@
             color: #667eea;
             text-align: center;
         }
+
+        .local-mode {
+            background: rgba(40, 167, 69, 0.1);
+            border-radius: 8px;
+            padding: 8px 15px;
+            font-size: 0.85rem;
+            color: #28a745;
+            text-align: center;
+            margin-bottom: 10px;
+            border: 1px solid rgba(40, 167, 69, 0.2);
+        }
     </style>
 </head>
 <body>
+    <div class="navbar">
+        <a href="/" class="navbar-brand">Document Text Replacer - Local Development</a>
+    </div>
+
     <div class="container">
-        <div class="logo-text">Testing Version</div>
+        <div class="local-mode">🔧 Local Development Mode - Running on localhost</div>
         <h1>Document Text Replacer</h1>
         <p class="subtitle">Replace text in PDF, CSV, XML, XPT files and ZIP folders with ease</p>
         
@@ -636,7 +668,9 @@
         // Add some interactive animations
         document.querySelectorAll('.btn').forEach(btn => {
             btn.addEventListener('mouseenter', function() {
-                this.style.transform = 'translateY(-3px)';
+                if (!this.disabled) {
+                    this.style.transform = 'translateY(-3px)';
+                }
             });
             
             btn.addEventListener('mouseleave', function() {
